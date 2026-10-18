@@ -270,7 +270,6 @@ $('send').onclick=async function(){
   var title=$('title').value.trim();
   if(!title){setMsg('Judul wajib diisi.',true);return}
   if(!$('tgl').value){setMsg('Pilih tanggal evidence.',true);return}
-  if($('tgl').value>todayStr()){setMsg('Tanggal evidence tidak boleh melebihi hari ini.',true);return}
   if(needAct()&&!$('act').value){setMsg('Pilih Action terlebih dahulu.',true);return}
   if(needAct()&&!getAction()){setMsg('Tulis action Anda pada kolom yang tersedia.',true);return}
   if(!$('notes').value.trim()&&!staged.length){setMsg('Isi keterangan atau lampirkan minimal satu file.',true);return}
@@ -290,6 +289,7 @@ $('send').onclick=async function(){
     var ins=await sb.from('evidence').insert({title:title,tanggal:$('tgl').value,cat:$('cat').value,action:getAction(),sender:by||'Tanpa nama',notes:$('notes').value.trim(),files:out});
     if(ins.error)throw ins.error;
     staged.forEach(function(s){URL.revokeObjectURL(s.url)});staged=[];render();
+    var tp=$('tgl').value.split('-');dashMo=(+tp[0])*12+(+tp[1])-1;
     $('title').value='';$('notes').value='';fillActs();setToday();
     setMsg('Evidence berhasil dikirim ✓');
     loadList();
@@ -313,7 +313,7 @@ function dateOf(d){
 }
 function fmtD(dt){return dt.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})}
 function todayStr(){var n=new Date(),m=n.getMonth()+1,d=n.getDate();return n.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(d<10?'0':'')+d}
-function setToday(){var t=todayStr();$('tgl').value=t;$('tgl').max=t}
+function setToday(){$('tgl').value=todayStr()}
 function niceMax(m){var st=[10,20,30,40,50,100,150,200,300,400,500,1000];for(var i=0;i<st.length;i++)if(m<=st[i])return st[i];return Math.ceil(m/1000)*1000}
 function mk(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!==undefined)e.textContent=x;return e}
 function bars(box,map,max){
@@ -346,13 +346,13 @@ function drawDash(){
   var PAL=['#2563eb','#16a34a','#f59e0b','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#4b5563','#0d9488','#a855f7','#84cc16'];
   var colr=function(c){var ix=order.indexOf(c);return PAL[(ix<0?0:ix)%PAL.length]};
   var cur=now.getFullYear()*12+now.getMonth();
-  if(dashMo===null||dashMo>cur)dashMo=cur;
+  if(dashMo===null)dashMo=cur;
   var yr=Math.floor(dashMo/12),mn=dashMo%12,dim=new Date(yr,mn+1,0).getDate();
   $('mLbl').textContent=new Date(yr,mn,1).toLocaleDateString('id-ID',{month:'long',year:'numeric'});
-  $('mNext').disabled=(dashMo>=cur);
-  var ys=now.getFullYear(),y0=ys;docs.forEach(function(d){var yy=dateOf(d).getFullYear();if(yy<y0)y0=yy});
-  if(ys-y0>20)y0=ys-20;
-  var sel=$('mYr');sel.innerHTML='';for(var yv=ys;yv>=y0;yv--)sel.appendChild(opt(String(yv),String(yv)));sel.value=String(yr);
+  $('mNext').disabled=(dashMo>=maxMo());
+  var ys=now.getFullYear(),y0=ys,y1=Math.max(ys,yr);docs.forEach(function(d){var yy=dateOf(d).getFullYear();if(yy<y0)y0=yy;if(yy>y1)y1=yy});
+  if(y1-y0>30)y0=y1-30;
+  var sel=$('mYr');sel.innerHTML='';for(var yv=y1;yv>=y0;yv--)sel.appendChild(opt(String(yv),String(yv)));sel.value=String(yr);
   var fd=function(dt){return dt.toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short',year:'numeric'})};
   var vals=[],mx=0,sum=0;
   for(var dn=1;dn<=dim;dn++){var dd=new Date(yr,mn,dn),k2=key(dd),v=days[k2]||0;vals.push([dd,v,dayCat[k2]||{}]);if(v>mx)mx=v;sum+=v}
@@ -414,9 +414,15 @@ function drawList(){
 }
 $('q').oninput=drawList;$('fcat').onchange=drawList;$('fyr').onchange=drawList;$('reload').onclick=function(){loadList()};
 function curMo(){var n=new Date();return n.getFullYear()*12+n.getMonth()}
+function maxMo(){
+  var mx=curMo();
+  docs.forEach(function(d){var x=dateOf(d),m=x.getFullYear()*12+x.getMonth();if(m>mx)mx=m});
+  if(dashMo!==null&&dashMo>mx)mx=dashMo;
+  return mx;
+}
 $('mPrev').onclick=function(){dashMo=(dashMo===null?curMo():dashMo)-1;drawDash()};
-$('mYr').onchange=function(){var y=+$('mYr').value,m=(dashMo===null?curMo():dashMo)%12;dashMo=Math.min(curMo(),y*12+m);drawDash()};
-$('mNext').onclick=function(){var c=curMo();dashMo=Math.min(c,(dashMo===null?c:dashMo)+1);drawDash()};
+$('mYr').onchange=function(){var y=+$('mYr').value,m=(dashMo===null?curMo():dashMo)%12;dashMo=Math.min(maxMo(),y*12+m);drawDash()};
+$('mNext').onclick=function(){dashMo=Math.min(maxMo(),(dashMo===null?curMo():dashMo)+1);drawDash()};
 
 async function signAll(rows){
   var paths=[];
