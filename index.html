@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pengumpulan Evidence</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--text:#1b1f27;--muted:#6a7280;--line:#e2e5ea;--accent:#2563eb;--accent-t:#fff;--danger:#c62828;--chip:#eef2ff}
+@media (prefers-color-scheme:dark){:root{--bg:#13161b;--card:#1c2027;--text:#e8eaee;--muted:#9aa2b0;--line:#2c323c;--accent:#6b9bff;--accent-t:#0d1117;--danger:#ff7b72;--chip:#232b3f;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:22px;margin:8px 0 2px}h2{font-size:17px;margin:0 0 12px}
+.sub{color:var(--muted);margin:0 0 18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px}
+label{display:block;font-weight:600;font-size:13px;margin:12px 0 4px}
+input[type=text],select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
+textarea{min-height:90px;resize:vertical}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:560px){.row{grid-template-columns:1fr}}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:18px;text-align:center;color:var(--muted);cursor:pointer;margin-top:4px}
+.drop.over{border-color:var(--accent);color:var(--accent)}
+.drop input{display:none}
+.prev{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:10px}
+.pv{position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg);aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:12px;text-align:center;padding:4px;word-break:break-all}
+.pv img,.pv video{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.pv button{position:absolute;top:3px;right:3px;z-index:2;border:0;border-radius:50%;width:22px;height:22px;background:rgba(0,0,0,.65);color:#fff;cursor:pointer}
+.pv .st{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.65);color:#fff;font-size:11px;padding:2px;z-index:2}
+.btn{background:var(--accent);color:var(--accent-t);border:0;border-radius:8px;padding:11px 18px;font:inherit;font-weight:600;cursor:pointer;margin-top:14px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sec{background:transparent;color:var(--text);border:1px solid var(--line);margin:0;padding:6px 10px;font-size:13px;font-weight:500}
+.msg{margin-top:10px;font-size:14px}.msg.err{color:var(--danger)}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.bar input,.bar select{flex:1;min-width:140px}
+.item{border-top:1px solid var(--line);padding:14px 0}
+.item:first-child{border-top:0}
+.t{font-weight:600}
+.meta{color:var(--muted);font-size:12.5px}
+.chip{display:inline-block;background:var(--chip);color:var(--accent);border-radius:999px;padding:1px 9px;font-size:12px;margin-right:6px}
+.notes{white-space:pre-wrap;margin:8px 0}
+.files{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.f{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg);aspect-ratio:1}
+.f img,.f video{width:100%;height:100%;object-fit:cover;cursor:zoom-in}
+.f a{display:flex;height:100%;align-items:center;justify-content:center;text-align:center;padding:6px;font-size:12px;color:var(--accent);word-break:break-all;text-decoration:none}
+.empty{color:var(--muted);text-align:center;padding:24px 0}
+#lb{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+#lb.on{display:flex}#lb img,#lb video{max-width:100%;max-height:100%}
+.head{display:flex;justify-content:space-between;align-items:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Pengumpulan Evidence</h1>
+  <p class="sub">Unggah foto, video, dokumen, dan catatan teks sebagai bukti kegiatan atau temuan.</p>
+
+  <div class="card">
+    <h2>Kirim evidence baru</h2>
+    <label for="title">Judul *</label>
+    <input type="text" id="title" placeholder="Contoh: Pengecekan unit A-12">
+    <div class="row">
+      <div><label for="cat">Kategori</label>
+        <select id="cat"><option>Umum</option><option>Inspeksi</option><option>Temuan</option><option>Perbaikan</option><option>Dokumen</option><option>Lainnya</option></select></div>
+      <div><label for="by">Nama pengirim</label><input type="text" id="by" placeholder="Nama Anda"></div>
+    </div>
+    <label for="notes">Keterangan</label>
+    <textarea id="notes" placeholder="Tuliskan kronologi, lokasi, atau catatan lain…"></textarea>
+    <label>Lampiran (foto, video, file; maks 20 MB per file)</label>
+    <div class="drop" id="drop">Ketuk untuk memilih file atau seret ke sini
+      <input type="file" id="pick" multiple></div>
+    <div class="prev" id="prev"></div>
+    <button class="btn" id="send">Kirim evidence</button>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="card">
+    <div class="head"><h2>Daftar evidence <span class="meta" id="count"></span></h2>
+      <button class="btn sec" id="reload">Muat ulang</button></div>
+    <div class="bar">
+      <input type="text" id="q" placeholder="Cari judul, nama, atau keterangan…">
+      <select id="fcat"><option value="">Semua kategori</option><option>Umum</option><option>Inspeksi</option><option>Temuan</option><option>Perbaikan</option><option>Dokumen</option><option>Lainnya</option></select>
+    </div>
+    <div id="list"><div class="empty">Memuat…</div></div>
+  </div>
+</div>
+<div id="lb"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+/* ====== ISI DUA BARIS INI DENGAN DATA PROYEK SUPABASE ANDA ====== */
+var SUPABASE_URL = 'https://atdhzoxfsyqzofxmhlpq.supabase.co';
+var SUPABASE_KEY = 'sb_publishable_bp99F0yVm7C07U2sl0yWJA_7aRcKRwo';
+/* ================================================================ */
+
+(function(){
+var $=function(i){return document.getElementById(i)};
+var sb=null,docs=[],staged=[],busy=false,MAX=20*1024*1024,BUCKET='evidence';
+
+function setMsg(t,err){var m=$('msg');m.textContent=t||'';m.className='msg'+(err?' err':'')}
+function fmt(n){return n>1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB'}
+function kind(t){t=t||'';if(t.indexOf('image/')===0)return 'img';if(t.indexOf('video/')===0)return 'vid';return 'file'}
+function safeName(n){return n.replace(/[^a-zA-Z0-9._-]+/g,'_').slice(-80)}
+
+try{$('by').value=localStorage.getItem('ev_by')||''}catch(e){}
+
+/* ---- memilih file ---- */
+function addFiles(list){
+  Array.prototype.forEach.call(list,function(f){
+    if(f.size>MAX){setMsg('“'+f.name+'” melebihi 20 MB dan dilewati.',true);return}
+    staged.push({file:f,url:URL.createObjectURL(f),st:''});
+  });render();
+}
+function render(){
+  var p=$('prev');p.innerHTML='';
+  staged.forEach(function(s,i){
+    var d=document.createElement('div');d.className='pv';
+    var k=kind(s.file.type);
+    if(k==='img'){var im=document.createElement('img');im.src=s.url;d.appendChild(im)}
+    else if(k==='vid'){var v=document.createElement('video');v.src=s.url;v.muted=true;d.appendChild(v)}
+    else{d.textContent=s.file.name}
+    var x=document.createElement('button');x.textContent='×';x.title='Hapus';
+    x.onclick=function(){if(busy)return;URL.revokeObjectURL(s.url);staged.splice(i,1);render()};
+    d.appendChild(x);
+    var st=document.createElement('div');st.className='st';st.textContent=s.st||fmt(s.file.size);d.appendChild(st);
+    p.appendChild(d);
+  });
+}
+$('drop').onclick=function(e){if(e.target.id!=='pick')$('pick').click()};
+$('pick').onchange=function(e){addFiles(e.target.files);e.target.value=''};
+['dragover','dragenter'].forEach(function(ev){$('drop').addEventListener(ev,function(e){e.preventDefault();$('drop').classList.add('over')})});
+['dragleave','drop'].forEach(function(ev){$('drop').addEventListener(ev,function(e){e.preventDefault();$('drop').classList.remove('over')})});
+$('drop').addEventListener('drop',function(e){if(e.dataTransfer)addFiles(e.dataTransfer.files)});
+
+/* ---- kirim ---- */
+$('send').onclick=async function(){
+  if(busy)return;
+  if(!sb){setMsg('Website belum dikonfigurasi. Isi SUPABASE_URL dan SUPABASE_KEY di index.html.',true);return}
+  var title=$('title').value.trim();
+  if(!title){setMsg('Judul wajib diisi.',true);return}
+  if(!$('notes').value.trim()&&!staged.length){setMsg('Isi keterangan atau lampirkan minimal satu file.',true);return}
+  busy=true;$('send').disabled=true;setMsg('Mengunggah…');
+  var out=[];
+  try{
+    for(var i=0;i<staged.length;i++){
+      var s=staged[i],f=s.file;s.st='Mengunggah…';render();
+      var path=new Date().toISOString().slice(0,10)+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'-'+safeName(f.name);
+      var up=await sb.storage.from(BUCKET).upload(path,f,{contentType:f.type||'application/octet-stream',upsert:false});
+      if(up.error)throw up.error;
+      var pub=sb.storage.from(BUCKET).getPublicUrl(path);
+      out.push({path:path,url:pub.data.publicUrl,name:f.name,type:f.type||'',size:f.size});
+      s.st='Selesai ✓';render();
+    }
+    var by=$('by').value.trim();
+    try{localStorage.setItem('ev_by',by)}catch(e){}
+    var ins=await sb.from('evidence').insert({title:title,cat:$('cat').value,sender:by||'Tanpa nama',notes:$('notes').value.trim(),files:out});
+    if(ins.error)throw ins.error;
+    staged.forEach(function(s){URL.revokeObjectURL(s.url)});staged=[];render();
+    $('title').value='';$('notes').value='';
+    setMsg('Evidence berhasil dikirim ✓');
+    loadList();
+  }catch(e){
+    setMsg('Gagal mengirim: '+((e&&e.message)||'terjadi kesalahan')+(out.length?' (sebagian file sudah terunggah)':''),true);
+  }
+  busy=false;$('send').disabled=false;
+};
+
+/* ---- daftar ---- */
+function openLb(f){
+  var lb=$('lb');lb.innerHTML='';var el=document.createElement('img');el.src=f.url;lb.appendChild(el);lb.classList.add('on');
+}
+function closeLb(){$('lb').classList.remove('on');$('lb').innerHTML=''}
+$('lb').onclick=function(e){if(e.target===$('lb'))closeLb()};
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeLb()});
+
+function drawList(){
+  var q=$('q').value.trim().toLowerCase(),fc=$('fcat').value,L=$('list');L.innerHTML='';
+  var rows=docs.filter(function(d){
+    if(fc&&d.cat!==fc)return false;
+    if(!q)return true;
+    return ((d.title||'')+' '+(d.sender||'')+' '+(d.notes||'')).toLowerCase().indexOf(q)>-1;
+  });
+  $('count').textContent='('+rows.length+')';
+  if(!rows.length){var e=document.createElement('div');e.className='empty';e.textContent=docs.length?'Tidak ada hasil.':'Belum ada evidence.';L.appendChild(e);return}
+  rows.forEach(function(d){
+    var it=document.createElement('div');it.className='item';
+    var t=document.createElement('div');t.className='t';t.textContent=d.title;it.appendChild(t);
+    var m=document.createElement('div');m.className='meta';
+    var c=document.createElement('span');c.className='chip';c.textContent=d.cat;m.appendChild(c);
+    m.appendChild(document.createTextNode((d.sender||'')+' · '+new Date(d.created_at).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'})));
+    it.appendChild(m);
+    if(d.notes){var n=document.createElement('div');n.className='notes';n.textContent=d.notes;it.appendChild(n)}
+    var fl=Array.isArray(d.files)?d.files:[];
+    if(fl.length){
+      var g=document.createElement('div');g.className='files';
+      fl.forEach(function(f){
+        var w=document.createElement('div');w.className='f';var k=kind(f.type);
+        if(k==='img'){var im=document.createElement('img');im.src=f.url;im.loading='lazy';im.onclick=function(){openLb(f)};w.appendChild(im)}
+        else if(k==='vid'){var v=document.createElement('video');v.src=f.url;v.preload='metadata';v.controls=true;w.appendChild(v)}
+        else{var a=document.createElement('a');a.href=f.url;a.target='_blank';a.rel='noopener';a.textContent='📄 '+f.name;w.appendChild(a)}
+        g.appendChild(w);
+      });
+      it.appendChild(g);
+    }
+    L.appendChild(it);
+  });
+}
+$('q').oninput=drawList;$('fcat').onchange=drawList;$('reload').onclick=function(){loadList()};
+
+async function loadList(){
+  if(!sb)return;
+  var r=await sb.from('evidence').select('*').order('created_at',{ascending:false}).limit(300);
+  if(r.error){$('list').innerHTML='';var d=document.createElement('div');d.className='empty';d.textContent='Gagal memuat data: '+r.error.message;$('list').appendChild(d);return}
+  docs=r.data||[];drawList();
+}
+
+/* ---- mulai ---- */
+if(SUPABASE_URL.indexOf('GANTI')===0||SUPABASE_KEY.indexOf('GANTI')===0||!window.supabase){
+  $('list').innerHTML='<div class="empty">Website belum dikonfigurasi. Isi SUPABASE_URL dan SUPABASE_KEY di index.html.</div>';
+}else{
+  sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  loadList();
+}
+})();
+</script>
+</body>
+</html>
