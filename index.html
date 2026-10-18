@@ -114,6 +114,11 @@ a{color:var(--accent)}
     <button class="btn sec" id="out2" style="margin-left:8px">Keluar</button>
   </div>
 
+  <div class="card" id="openCard" style="display:none">
+    <p id="openMsg">Membuka file…</p>
+    <p class="meta"><a href="./" id="backHome">Kembali ke halaman utama</a></p>
+  </div>
+
   <div id="app" style="display:none">
   <div class="head" style="margin-bottom:12px"><span class="meta" id="who"></span><button class="btn sec" id="logout">Keluar</button></div>
   <div class="card" id="dash">
@@ -162,7 +167,7 @@ a{color:var(--accent)}
 
   <div class="card">
     <div class="head"><h2>Daftar evidence <span class="meta" id="count"></span></h2>
-      <button class="btn sec" id="reload">Muat ulang</button></div>
+      <span><button class="btn sec" id="export">Ekspor (Excel + file)</button> <button class="btn sec" id="reload">Muat ulang</button></span></div>
     <div class="bar">
       <input type="text" id="q" placeholder="Cari judul, nama, atau keterangan…">
       <select id="fcat"></select>
@@ -379,14 +384,120 @@ function drawDash(){
   uk.forEach(function(c){var sp=mk('span'),sw=mk('i');sw.style.background=colr(c);sp.appendChild(sw);sp.appendChild(document.createTextNode(c));lg.appendChild(sp)});
 }
 
-function drawList(){
-  var q=$('q').value.trim().toLowerCase(),fc=$('fcat').value,fy=$('fyr').value,L=$('list');L.innerHTML='';
-  var rows=docs.filter(function(d){
+function filtered(){
+  var q=$('q').value.trim().toLowerCase(),fc=$('fcat').value,fy=$('fyr').value;
+  return docs.filter(function(d){
     if(fc&&d.cat!==fc)return false;
     if(fy&&String(dateOf(d).getFullYear())!==fy)return false;
     if(!q)return true;
     return ((d.title||'')+' '+(d.sender||'')+' '+(d.notes||'')+' '+(d.action||'')).toLowerCase().indexOf(q)>-1;
   });
+}
+
+/* ---- ekspor: Excel (foto tertanam) + semua file asli dalam satu ZIP ---- */
+function loadScript(src){return new Promise(function(ok,fail){var sc=document.createElement('script');sc.src=src;sc.onload=ok;sc.onerror=function(){fail(new Error('Gagal memuat pustaka ekspor. Periksa koneksi internet.'))};document.head.appendChild(sc)})}
+function libs(){
+  var p=[];
+  if(!window.JSZip)p.push(loadScript('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'));
+  if(!window.ExcelJS)p.push(loadScript('https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'));
+  return Promise.all(p);
+}
+function slug(t,n){return String(t||'').replace(/[^a-zA-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,n)||'evidence'}
+function shrink(blob,maxW){
+  return new Promise(function(ok,fail){
+    var url=URL.createObjectURL(blob),img=new Image();
+    img.onload=function(){
+      var w=img.naturalWidth,h=img.naturalHeight,sc=Math.min(1,maxW/Math.max(w,1));
+      var cw=Math.max(1,Math.round(w*sc)),ch=Math.max(1,Math.round(h*sc));
+      var c=document.createElement('canvas');c.width=cw;c.height=ch;
+      var x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cw,ch);x.drawImage(img,0,0,cw,ch);
+      URL.revokeObjectURL(url);ok({data:c.toDataURL('image/jpeg',0.8),w:cw,h:ch});
+    };
+    img.onerror=function(){URL.revokeObjectURL(url);fail(new Error('gambar tidak dapat dibaca'))};
+    img.src=url;
+  });
+}
+var exporting=false;
+async function exportAll(){
+  if(exporting)return;
+  var rows=filtered();
+  if(!rows.length){alert('Tidak ada data untuk diekspor.');return}
+  var total=0;
+  rows.forEach(function(d){(Array.isArray(d.files)?d.files:[]).forEach(function(f){total+=f.size||0})});
+  if(total>150*1048576&&!confirm('Total file sekitar '+fmt(total)+'. Proses bisa lama dan memakai banyak memori. Lanjutkan?'))return;
+  exporting=true;var btn=$('export'),lbl=btn.textContent;btn.disabled=true;
+  try{
+    btn.textContent='Menyiapkan…';
+    await libs();
+    var jobs=[];
+    rows.forEach(function(d,ri){
+      var iso=d.tanggal||new Date(d.created_at).toLocaleDateString('sv-SE');
+      var folder=iso+'_'+slug(d.title,40)+'_'+String(d.id||ri).slice(0,6);
+      (Array.isArray(d.files)?d.files:[]).forEach(function(f,fi){
+        if(!f||!f.path)return;
+        jobs.push({ri:ri,f:f,zipPath:'file/'+folder+'/'+(fi+1)+'_'+safeName(f.name||'file')});
+      });
+    });
+    var zip=new JSZip(),done=0;
+    for(var i=0;i<jobs.length;i+=3){
+      await Promise.all(jobs.slice(i,i+3).map(async function(j){
+        var r=await sb.storage.from(BUCKET).download(j.f.path);
+        if(!r.error&&r.data){j.blob=r.data;zip.file(j.zipPath,r.data)}
+        done++;btn.textContent='Mengunduh file '+done+'/'+jobs.length;
+      }));
+    }
+    btn.textContent='Menyusun Excel…';
+    var CAP=6,rowImgs={},rowOth={};
+    for(var k=0;k<jobs.length;k++){
+      var j=jobs[k],t=j.f.type||'';
+      rowImgs[j.ri]=rowImgs[j.ri]||[];rowOth[j.ri]=rowOth[j.ri]||[];
+      if(j.blob&&/^image\//.test(t)&&!/svg/.test(t)&&rowImgs[j.ri].length<CAP){
+        try{j.img=await shrink(j.blob,700);rowImgs[j.ri].push(j);continue}catch(e){}
+      }
+      rowOth[j.ri].push(j);
+    }
+    var wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('Evidence'),nI=0,nO=0;
+    rows.forEach(function(d,ri){nI=Math.max(nI,(rowImgs[ri]||[]).length);nO=Math.max(nO,(rowOth[ri]||[]).length)});
+    var heads=['Tanggal','Kategori','Action','Judul','Pengirim','Keterangan','Waktu kirim','Jumlah file'],widths=[12,14,26,30,18,40,18,10],q;
+    for(q=1;q<=nI;q++){heads.push('Foto '+q);widths.push(24)}
+    for(q=1;q<=nO;q++){heads.push('File '+q);widths.push(32)}
+    ws.addRow(heads);
+    widths.forEach(function(w,ix){ws.getColumn(ix+1).width=w});
+    var hr=ws.getRow(1);hr.font={bold:true};hr.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE5E7EB'}};
+    ws.views=[{state:'frozen',ySplit:1}];
+    rows.forEach(function(d,ri){
+      var fl=Array.isArray(d.files)?d.files:[],dt=dateOf(d);
+      var row=ws.addRow([new Date(Date.UTC(dt.getFullYear(),dt.getMonth(),dt.getDate())),d.cat,d.action||'',d.title,d.sender||'',d.notes||'',new Date(d.created_at).toLocaleString('sv-SE'),fl.length]);
+      row.getCell(1).numFmt='dd/mm/yyyy';
+      row.alignment={vertical:'top',wrapText:true};
+      var imgs=rowImgs[ri]||[],oth=rowOth[ri]||[];
+      if(imgs.length)row.height=100;
+      imgs.forEach(function(j,ix){
+        var sc=Math.min(165/j.img.w,125/j.img.h,1);
+        var id=wb.addImage({base64:j.img.data,extension:'jpeg'});
+        ws.addImage(id,{tl:{col:8+ix+0.05,row:ri+1+0.05},ext:{width:Math.round(j.img.w*sc),height:Math.round(j.img.h*sc)}});
+      });
+      oth.forEach(function(j,ix){
+        var cell=row.getCell(9+nI+ix);
+        if(j.blob){cell.value={text:j.f.name||'file',hyperlink:j.zipPath};cell.font={color:{argb:'FF2563EB'},underline:true}}
+        else cell.value=(j.f.name||'file')+' (gagal diunduh)';
+      });
+    });
+    var buf=await wb.xlsx.writeBuffer();
+    zip.file('evidence.xlsx',buf);
+    var out=await zip.generateAsync({type:'blob'},function(m){btn.textContent='Mengemas ZIP '+Math.round(m.percent)+'%'});
+    var a=document.createElement('a');a.href=URL.createObjectURL(out);a.download='evidence_'+todayStr()+'.zip';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(a.href)},4000);
+  }catch(e){
+    alert('Ekspor gagal: '+((e&&e.message)||e));
+  }
+  exporting=false;btn.disabled=false;btn.textContent=lbl;
+}
+
+function drawList(){
+  var L=$('list');L.innerHTML='';
+  var rows=filtered();
   $('count').textContent='('+rows.length+')';
   if(!rows.length){var e=document.createElement('div');e.className='empty';e.textContent=docs.length?'Tidak ada hasil.':'Belum ada evidence.';L.appendChild(e);return}
   rows.forEach(function(d){
@@ -414,6 +525,7 @@ function drawList(){
     L.appendChild(it);
   });
 }
+$('export').onclick=exportAll;
 $('q').oninput=drawList;$('fcat').onchange=drawList;$('fyr').onchange=drawList;$('reload').onclick=function(){loadList()};
 function curMo(){var n=new Date();return n.getFullYear()*12+n.getMonth()}
 function maxMo(){
@@ -453,15 +565,25 @@ function show(w){
   $('loginCard').style.display=w==='login'?'block':'none';
   $('pendingCard').style.display=w==='pending'?'block':'none';
   $('app').style.display=w==='app'?'block':'none';
+  $('openCard').style.display=w==='open'?'block':'none';
+}
+function fileParam(){try{return new URLSearchParams(location.search).get('file')||''}catch(e){return ''}}
+async function openFile(path){
+  $('openMsg').textContent='Membuka file…';show('open');
+  var r=await sb.storage.from(BUCKET).createSignedUrl(path,300);
+  if(r.error||!r.data||!r.data.signedUrl){$('openMsg').textContent='File tidak ditemukan atau Anda tidak punya akses.';return}
+  location.replace(r.data.signedUrl);
 }
 var authed=false;
 async function gate(session){
-  if(!session){authed=false;docs=[];show('login');return}
+  if(!session){authed=false;docs=[];show('login');if(fileParam())lm('Masuk untuk membuka file yang ditautkan.');return}
   var u=session.user,r=await sb.from('anggota').select('approved,nama').eq('id',u.id).maybeSingle();
   var row=r.data;
   if(row&&row.approved){
     $('who').textContent='Masuk sebagai '+(row.nama||uname(u.email));
     if(!$('by').value&&row.nama)$('by').value=row.nama;
+    var fp=fileParam();
+    if(fp){openFile(fp);return}
     show('app');
     if(!authed){authed=true;loadList()}
   }else{
