@@ -42,6 +42,7 @@ textarea{min-height:90px;resize:vertical}
 .f{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg);aspect-ratio:1}
 .f img,.f video{width:100%;height:100%;object-fit:cover;cursor:zoom-in}
 .f a{display:flex;height:100%;align-items:center;justify-content:center;text-align:center;padding:6px;font-size:12px;color:var(--accent);word-break:break-all;text-decoration:none}
+.act{margin-top:4px;font-size:13.5px}
 .empty{color:var(--muted);text-align:center;padding:24px 0}
 #lb{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
 #lb.on{display:flex}#lb img,#lb video{max-width:100%;max-height:100%}
@@ -74,6 +75,7 @@ textarea{min-height:90px;resize:vertical}
     <div class="dgrid">
       <div><h3>Evidence per kategori</h3><div id="dCat"></div></div>
       <div><h3>Pengirim teratas</h3><div id="dBy"></div></div>
+      <div><h3>Action terbanyak</h3><div id="dAct"></div></div>
     </div>
     <div style="margin-top:18px"><h3 style="font-size:14px;margin:0 0 8px">Kiriman 14 hari terakhir</h3>
       <div class="trend" id="dTrend"></div><div class="tl" id="dTl"></div></div>
@@ -85,9 +87,12 @@ textarea{min-height:90px;resize:vertical}
     <input type="text" id="title" placeholder="Contoh: Pengecekan unit A-12">
     <div class="row">
       <div><label for="cat">Kategori</label>
-        <select id="cat"><option>Umum</option><option>Inspeksi</option><option>Temuan</option><option>Perbaikan</option><option>Dokumen</option><option>Lainnya</option></select></div>
+        <select id="cat"></select></div>
       <div><label for="by">Nama pengirim</label><input type="text" id="by" placeholder="Nama Anda"></div>
     </div>
+    <label for="act">Action *</label>
+    <select id="act"></select>
+    <input type="text" id="actOther" placeholder="Tulis action Anda…" style="display:none;margin-top:8px">
     <label for="notes">Keterangan</label>
     <textarea id="notes" placeholder="Tuliskan kronologi, lokasi, atau catatan lain…"></textarea>
     <label>Lampiran (foto, video, file; maks 20 MB per file)</label>
@@ -103,7 +108,7 @@ textarea{min-height:90px;resize:vertical}
       <button class="btn sec" id="reload">Muat ulang</button></div>
     <div class="bar">
       <input type="text" id="q" placeholder="Cari judul, nama, atau keterangan…">
-      <select id="fcat"><option value="">Semua kategori</option><option>Umum</option><option>Inspeksi</option><option>Temuan</option><option>Perbaikan</option><option>Dokumen</option><option>Lainnya</option></select>
+      <select id="fcat"></select>
     </div>
     <div id="list"><div class="empty">Memuat…</div></div>
   </div>
@@ -119,6 +124,16 @@ var SUPABASE_KEY = 'sb_publishable_bp99F0yVm7C07U2sl0yWJA_7aRcKRwo';
 
 (function(){
 var $=function(i){return document.getElementById(i)};
+/* ====== DAFTAR KATEGORI DAN ACTION (boleh diubah sesuai kebutuhan) ====== */
+var CATS={
+ 'Hardware':['Pengecekan unit','Penggantian komponen','Pembersihan / maintenance','Instalasi perangkat baru','Perbaikan (repair)','Eskalasi ke vendor / teknisi'],
+ 'Software':['Instalasi / update aplikasi','Konfigurasi','Troubleshooting error','Reset akun / password','Backup / restore','Eskalasi ke tim terkait'],
+ 'Network':['Cek konektivitas (ping / traceroute)','Restart perangkat jaringan','Konfigurasi perangkat','Penggantian kabel / konektor','Monitoring link','Eskalasi ke provider'],
+ 'SOP Operator':['Pelaksanaan SOP sesuai prosedur','Pengisian log / daily activity','Serah terima shift','Pelaporan insiden','Verifikasi checklist','Eskalasi ke dispatcher / supervisor'],
+ 'SOP Dispatcher':['Penugasan / dispatch tiket','Koordinasi dengan teknisi','Monitoring progres tugas','Update status tiket','Eskalasi ke supervisor','Penutupan tiket / laporan']
+};
+var OTHER='Lainnya (tulis sendiri)';
+/* ======================================================================= */
 var sb=null,docs=[],staged=[],busy=false,MAX=20*1024*1024,BUCKET='evidence';
 
 function setMsg(t,err){var m=$('msg');m.textContent=t||'';m.className='msg'+(err?' err':'')}
@@ -127,6 +142,30 @@ function kind(t){t=t||'';if(t.indexOf('image/')===0)return 'img';if(t.indexOf('v
 function safeName(n){return n.replace(/[^a-zA-Z0-9._-]+/g,'_').slice(-80)}
 
 try{$('by').value=localStorage.getItem('ev_by')||''}catch(e){}
+
+function opt(v,t){var o=document.createElement('option');o.value=v;o.textContent=t;return o}
+function fillActs(){
+  var a=$('act'),c=$('cat').value;a.innerHTML='';
+  a.appendChild(opt('','— Pilih action —'));
+  (CATS[c]||[]).forEach(function(x){a.appendChild(opt(x,x))});
+  a.appendChild(opt(OTHER,OTHER));
+  $('actOther').style.display='none';$('actOther').value='';
+}
+function fillCats(){
+  var c=$('cat');c.innerHTML='';
+  Object.keys(CATS).forEach(function(k){c.appendChild(opt(k,k))});
+  fillActs();
+}
+function fillFilter(){
+  var f=$('fcat'),cur=f.value,seen={};f.innerHTML='';
+  f.appendChild(opt('','Semua kategori'));
+  Object.keys(CATS).forEach(function(k){seen[k]=1;f.appendChild(opt(k,k))});
+  docs.forEach(function(d){if(d.cat&&!seen[d.cat]){seen[d.cat]=1;f.appendChild(opt(d.cat,d.cat))}});
+  f.value=cur;
+}
+function getAction(){var v=$('act').value;return v===OTHER?$('actOther').value.trim():v}
+$('cat').onchange=fillActs;
+$('act').onchange=function(){var o=$('act').value===OTHER;$('actOther').style.display=o?'block':'none';if(o)$('actOther').focus()};
 
 /* ---- memilih file ---- */
 function addFiles(list){
@@ -162,6 +201,8 @@ $('send').onclick=async function(){
   if(!sb){setMsg('Website belum dikonfigurasi. Isi SUPABASE_URL dan SUPABASE_KEY di index.html.',true);return}
   var title=$('title').value.trim();
   if(!title){setMsg('Judul wajib diisi.',true);return}
+  if(!$('act').value){setMsg('Pilih Action terlebih dahulu.',true);return}
+  if(!getAction()){setMsg('Tulis action Anda pada kolom yang tersedia.',true);return}
   if(!$('notes').value.trim()&&!staged.length){setMsg('Isi keterangan atau lampirkan minimal satu file.',true);return}
   busy=true;$('send').disabled=true;setMsg('Mengunggah…');
   var out=[];
@@ -177,10 +218,10 @@ $('send').onclick=async function(){
     }
     var by=$('by').value.trim();
     try{localStorage.setItem('ev_by',by)}catch(e){}
-    var ins=await sb.from('evidence').insert({title:title,cat:$('cat').value,sender:by||'Tanpa nama',notes:$('notes').value.trim(),files:out});
+    var ins=await sb.from('evidence').insert({title:title,cat:$('cat').value,action:getAction(),sender:by||'Tanpa nama',notes:$('notes').value.trim(),files:out});
     if(ins.error)throw ins.error;
     staged.forEach(function(s){URL.revokeObjectURL(s.url)});staged=[];render();
-    $('title').value='';$('notes').value='';
+    $('title').value='';$('notes').value='';fillActs();
     setMsg('Evidence berhasil dikirim ✓');
     loadList();
   }catch(e){
@@ -210,10 +251,11 @@ function bars(box,map,max){
   });
 }
 function drawDash(){
-  var cats={},snd={},days={},img=0,vid=0,oth=0,bytes=0,tc=0,nf=0,now=new Date();
+  var cats={},acts={},snd={},days={},img=0,vid=0,oth=0,bytes=0,tc=0,nf=0,now=new Date();
   function key(d){return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()}
   docs.forEach(function(d){
     cats[d.cat||'Umum']=(cats[d.cat||'Umum']||0)+1;
+    if(d.action)acts[d.action]=(acts[d.action]||0)+1;
     var s=d.sender||'Tanpa nama';snd[s]=(snd[s]||0)+1;
     var dt=new Date(d.created_at),k=key(dt);days[k]=(days[k]||0)+1;if(k===key(now))tc++;
     (Array.isArray(d.files)?d.files:[]).forEach(function(f){nf++;bytes+=f.size||0;var t=kind(f.type);if(t==='img')img++;else if(t==='vid')vid++;else oth++});
@@ -222,7 +264,7 @@ function drawDash(){
   var items=[['Total evidence',docs.length],['Masuk hari ini',tc],['Total file',nf],['Foto',img],['Video',vid],['Dokumen/lain',oth],['Ukuran file',size]];
   var st=$('stats');st.innerHTML='';
   items.forEach(function(it){var b=mk('div','stat');b.appendChild(mk('b','',String(it[1])));b.appendChild(mk('span','',it[0]));st.appendChild(b)});
-  bars($('dCat'),cats,8);bars($('dBy'),snd,5);
+  bars($('dCat'),cats,8);bars($('dBy'),snd,5);bars($('dAct'),acts,8);
   var tr=$('dTrend');tr.innerHTML='';var vals=[],mx=1,first='',last='';
   for(var i=13;i>=0;i--){var d=new Date(now.getFullYear(),now.getMonth(),now.getDate()-i);var v=days[key(d)]||0;vals.push([d,v]);if(v>mx)mx=v}
   vals.forEach(function(x){var b=mk('div');b.style.height=Math.max(2,Math.round(x[1]/mx*100))+'%';b.title=x[0].toLocaleDateString('id-ID',{day:'numeric',month:'short'})+': '+x[1];tr.appendChild(b)});
@@ -235,7 +277,7 @@ function drawList(){
   var rows=docs.filter(function(d){
     if(fc&&d.cat!==fc)return false;
     if(!q)return true;
-    return ((d.title||'')+' '+(d.sender||'')+' '+(d.notes||'')).toLowerCase().indexOf(q)>-1;
+    return ((d.title||'')+' '+(d.sender||'')+' '+(d.notes||'')+' '+(d.action||'')).toLowerCase().indexOf(q)>-1;
   });
   $('count').textContent='('+rows.length+')';
   if(!rows.length){var e=document.createElement('div');e.className='empty';e.textContent=docs.length?'Tidak ada hasil.':'Belum ada evidence.';L.appendChild(e);return}
@@ -246,6 +288,7 @@ function drawList(){
     var c=document.createElement('span');c.className='chip';c.textContent=d.cat;m.appendChild(c);
     m.appendChild(document.createTextNode((d.sender||'')+' · '+new Date(d.created_at).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'})));
     it.appendChild(m);
+    if(d.action){var ac=mk('div','act');var ab=mk('b','','Action: ');ac.appendChild(ab);ac.appendChild(document.createTextNode(d.action));it.appendChild(ac)}
     if(d.notes){var n=document.createElement('div');n.className='notes';n.textContent=d.notes;it.appendChild(n)}
     var fl=Array.isArray(d.files)?d.files:[];
     if(fl.length){
@@ -268,10 +311,11 @@ async function loadList(){
   if(!sb)return;
   var r=await sb.from('evidence').select('*').order('created_at',{ascending:false}).limit(1000);
   if(r.error){$('list').innerHTML='';var d=document.createElement('div');d.className='empty';d.textContent='Gagal memuat data: '+r.error.message;$('list').appendChild(d);return}
-  docs=r.data||[];drawList();drawDash();
+  docs=r.data||[];fillFilter();drawList();drawDash();
 }
 
 /* ---- mulai ---- */
+fillCats();fillFilter();
 if(SUPABASE_URL.indexOf('GANTI')===0||SUPABASE_KEY.indexOf('GANTI')===0||!window.supabase){
   $('list').innerHTML='<div class="empty">Website belum dikonfigurasi. Isi SUPABASE_URL dan SUPABASE_KEY di index.html.</div>';
 }else{
