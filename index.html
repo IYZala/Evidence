@@ -45,6 +45,21 @@ textarea{min-height:90px;resize:vertical}
 .empty{color:var(--muted);text-align:center;padding:24px 0}
 #lb{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
 #lb.on{display:flex}#lb img,#lb video{max-width:100%;max-height:100%}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:10px}
+.stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px}
+.stat b{display:block;font-size:24px;line-height:1.2}
+.stat span{color:var(--muted);font-size:12.5px}
+.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+@media(max-width:640px){.dgrid{grid-template-columns:1fr}}
+.dgrid h3{font-size:14px;margin:0 0 8px}
+.hb{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:13px}
+.hb .n{width:84px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb .tr{flex:1;background:var(--bg);border-radius:6px;height:14px;overflow:hidden}
+.hb .tr i{display:block;height:100%;background:var(--accent)}
+.hb .v{width:30px;text-align:right;color:var(--muted)}
+.trend{display:flex;align-items:flex-end;gap:3px;height:110px;border-bottom:1px solid var(--line)}
+.trend div{flex:1;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}
+.tl{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin-top:3px}
 .head{display:flex;justify-content:space-between;align-items:center}
 </style>
 </head>
@@ -52,6 +67,17 @@ textarea{min-height:90px;resize:vertical}
 <div class="wrap">
   <h1>Pengumpulan Evidence</h1>
   <p class="sub">Unggah foto, video, dokumen, dan catatan teks sebagai bukti kegiatan atau temuan.</p>
+
+  <div class="card" id="dash">
+    <h2>Dashboard</h2>
+    <div class="stats" id="stats"></div>
+    <div class="dgrid">
+      <div><h3>Evidence per kategori</h3><div id="dCat"></div></div>
+      <div><h3>Pengirim teratas</h3><div id="dBy"></div></div>
+    </div>
+    <div style="margin-top:18px"><h3 style="font-size:14px;margin:0 0 8px">Kiriman 14 hari terakhir</h3>
+      <div class="trend" id="dTrend"></div><div class="tl" id="dTl"></div></div>
+  </div>
 
   <div class="card">
     <h2>Kirim evidence baru</h2>
@@ -171,6 +197,39 @@ function closeLb(){$('lb').classList.remove('on');$('lb').innerHTML=''}
 $('lb').onclick=function(e){if(e.target===$('lb'))closeLb()};
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeLb()});
 
+function mk(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!==undefined)e.textContent=x;return e}
+function bars(box,map,max){
+  box.innerHTML='';
+  var arr=Object.keys(map).map(function(k){return [k,map[k]]}).sort(function(a,b){return b[1]-a[1]}).slice(0,max||8);
+  if(!arr.length){box.appendChild(mk('div','meta','Belum ada data'));return}
+  var top=arr[0][1];
+  arr.forEach(function(a){
+    var r=mk('div','hb');r.appendChild(mk('div','n',a[0])).title=a[0];
+    var tr=mk('div','tr'),i=mk('i');i.style.width=Math.round(a[1]/top*100)+'%';tr.appendChild(i);r.appendChild(tr);
+    r.appendChild(mk('div','v',String(a[1])));box.appendChild(r);
+  });
+}
+function drawDash(){
+  var cats={},snd={},days={},img=0,vid=0,oth=0,bytes=0,tc=0,nf=0,now=new Date();
+  function key(d){return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()}
+  docs.forEach(function(d){
+    cats[d.cat||'Umum']=(cats[d.cat||'Umum']||0)+1;
+    var s=d.sender||'Tanpa nama';snd[s]=(snd[s]||0)+1;
+    var dt=new Date(d.created_at),k=key(dt);days[k]=(days[k]||0)+1;if(k===key(now))tc++;
+    (Array.isArray(d.files)?d.files:[]).forEach(function(f){nf++;bytes+=f.size||0;var t=kind(f.type);if(t==='img')img++;else if(t==='vid')vid++;else oth++});
+  });
+  var size=bytes>1073741824?(bytes/1073741824).toFixed(2)+' GB':(bytes/1048576).toFixed(1)+' MB';
+  var items=[['Total evidence',docs.length],['Masuk hari ini',tc],['Total file',nf],['Foto',img],['Video',vid],['Dokumen/lain',oth],['Ukuran file',size]];
+  var st=$('stats');st.innerHTML='';
+  items.forEach(function(it){var b=mk('div','stat');b.appendChild(mk('b','',String(it[1])));b.appendChild(mk('span','',it[0]));st.appendChild(b)});
+  bars($('dCat'),cats,8);bars($('dBy'),snd,5);
+  var tr=$('dTrend');tr.innerHTML='';var vals=[],mx=1,first='',last='';
+  for(var i=13;i>=0;i--){var d=new Date(now.getFullYear(),now.getMonth(),now.getDate()-i);var v=days[key(d)]||0;vals.push([d,v]);if(v>mx)mx=v}
+  vals.forEach(function(x){var b=mk('div');b.style.height=Math.max(2,Math.round(x[1]/mx*100))+'%';b.title=x[0].toLocaleDateString('id-ID',{day:'numeric',month:'short'})+': '+x[1];tr.appendChild(b)});
+  var f=function(d){return d.toLocaleDateString('id-ID',{day:'numeric',month:'short'})};
+  var tl=$('dTl');tl.innerHTML='';tl.appendChild(mk('span','',f(vals[0][0])));tl.appendChild(mk('span','',f(vals[13][0])));
+}
+
 function drawList(){
   var q=$('q').value.trim().toLowerCase(),fc=$('fcat').value,L=$('list');L.innerHTML='';
   var rows=docs.filter(function(d){
@@ -207,9 +266,9 @@ $('q').oninput=drawList;$('fcat').onchange=drawList;$('reload').onclick=function
 
 async function loadList(){
   if(!sb)return;
-  var r=await sb.from('evidence').select('*').order('created_at',{ascending:false}).limit(300);
+  var r=await sb.from('evidence').select('*').order('created_at',{ascending:false}).limit(1000);
   if(r.error){$('list').innerHTML='';var d=document.createElement('div');d.className='empty';d.textContent='Gagal memuat data: '+r.error.message;$('list').appendChild(d);return}
-  docs=r.data||[];drawList();
+  docs=r.data||[];drawList();drawDash();
 }
 
 /* ---- mulai ---- */
@@ -217,7 +276,7 @@ if(SUPABASE_URL.indexOf('GANTI')===0||SUPABASE_KEY.indexOf('GANTI')===0||!window
   $('list').innerHTML='<div class="empty">Website belum dikonfigurasi. Isi SUPABASE_URL dan SUPABASE_KEY di index.html.</div>';
 }else{
   sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-  loadList();
+  drawDash();loadList();
 }
 })();
 </script>
