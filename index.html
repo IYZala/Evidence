@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -14,7 +15,7 @@ h1{font-size:22px;margin:8px 0 2px}h2{font-size:17px;margin:0 0 12px}
 .sub{color:var(--muted);margin:0 0 18px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px}
 label{display:block;font-weight:600;font-size:13px;margin:12px 0 4px}
-input[type=text],select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
+input[type=text],input[type=password],select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
 textarea{min-height:90px;resize:vertical}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:560px){.row{grid-template-columns:1fr}}
@@ -43,6 +44,7 @@ textarea{min-height:90px;resize:vertical}
 .f img,.f video{width:100%;height:100%;object-fit:cover;cursor:zoom-in}
 .f a{display:flex;height:100%;align-items:center;justify-content:center;text-align:center;padding:6px;font-size:12px;color:var(--accent);word-break:break-all;text-decoration:none}
 .act{margin-top:4px;font-size:13.5px}
+a{color:var(--accent)}
 .empty{color:var(--muted);text-align:center;padding:24px 0}
 #lb{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
 #lb.on{display:flex}#lb img,#lb video{max-width:100%;max-height:100%}
@@ -69,6 +71,42 @@ textarea{min-height:90px;resize:vertical}
   <h1>Pengumpulan Evidence</h1>
   <p class="sub">Unggah foto, video, dokumen, dan catatan teks sebagai bukti kegiatan atau temuan.</p>
 
+  <div class="card" id="loginCard" style="display:none">
+    <div id="fMasuk">
+      <h2>Masuk</h2>
+      <p class="meta">Halaman ini hanya untuk pengguna yang sudah terdaftar dan disetujui admin.</p>
+      <label for="em">Username</label>
+      <input type="text" id="em" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+      <label for="pw">Password</label>
+      <input type="password" id="pw" autocomplete="current-password">
+      <button class="btn" id="login">Masuk</button>
+      <p class="meta" style="margin-top:12px">Belum punya akun? <a href="#" id="toDaftar">Daftar di sini</a></p>
+    </div>
+    <div id="fDaftar" style="display:none">
+      <h2>Daftar akun</h2>
+      <p class="meta">Setelah mendaftar, akun Anda harus disetujui admin sebelum bisa melihat dan mengirim evidence.</p>
+      <label for="rn">Nama lengkap</label>
+      <input type="text" id="rn" autocomplete="name">
+      <label for="re">Username (huruf kecil, angka, titik, atau garis bawah; 3–20 karakter)</label>
+      <input type="text" id="re" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false">
+      <label for="rp">Password (minimal 6 karakter)</label>
+      <input type="password" id="rp" autocomplete="new-password">
+      <button class="btn" id="daftar">Daftar</button>
+      <p class="meta" style="margin-top:12px">Sudah punya akun? <a href="#" id="toMasuk">Masuk</a></p>
+    </div>
+    <div class="msg" id="lmsg"></div>
+  </div>
+
+  <div class="card" id="pendingCard" style="display:none">
+    <h2>Menunggu persetujuan</h2>
+    <p>Akun Anda sudah terdaftar, tetapi belum disetujui admin. Hubungi admin, lalu klik <b>Periksa lagi</b>.</p>
+    <div class="meta" id="pwho"></div>
+    <button class="btn" id="cek">Periksa lagi</button>
+    <button class="btn sec" id="out2" style="margin-left:8px">Keluar</button>
+  </div>
+
+  <div id="app" style="display:none">
+  <div class="head" style="margin-bottom:12px"><span class="meta" id="who"></span><button class="btn sec" id="logout">Keluar</button></div>
   <div class="card" id="dash">
     <h2>Dashboard</h2>
     <div class="stats" id="stats"></div>
@@ -114,6 +152,7 @@ textarea{min-height:90px;resize:vertical}
     </div>
     <div id="list"><div class="empty">Memuat…</div></div>
   </div>
+  </div>
 </div>
 <div id="lb"></div>
 
@@ -122,6 +161,9 @@ textarea{min-height:90px;resize:vertical}
 /* ====== ISI DUA BARIS INI DENGAN DATA PROYEK SUPABASE ANDA ====== */
 var SUPABASE_URL = 'https://atdhzoxfsyqzofxmhlpq.supabase.co';
 var SUPABASE_KEY = 'sb_publishable_bp99F0yVm7C07U2sl0yWJA_7aRcKRwo';
+/* Supabase mewajibkan kolom email. Pengguna cukup mengetik username; website
+   menyusun email internal: username@EMAIL_DOMAIN. Tidak ada email yang dikirim. */
+var EMAIL_DOMAIN = 'gmail.com';
 /* ================================================================ */
 
 (function(){
@@ -217,8 +259,7 @@ $('send').onclick=async function(){
       var path=new Date().toISOString().slice(0,10)+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'-'+safeName(f.name);
       var up=await sb.storage.from(BUCKET).upload(path,f,{contentType:f.type||'application/octet-stream',upsert:false});
       if(up.error)throw up.error;
-      var pub=sb.storage.from(BUCKET).getPublicUrl(path);
-      out.push({path:path,url:pub.data.publicUrl,name:f.name,type:f.type||'',size:f.size});
+            out.push({path:path,url:'',name:f.name,type:f.type||'',size:f.size});
       s.st='Selesai ✓';render();
     }
     var by=$('by').value.trim();
@@ -312,20 +353,93 @@ function drawList(){
 }
 $('q').oninput=drawList;$('fcat').onchange=drawList;$('reload').onclick=function(){loadList()};
 
+async function signAll(rows){
+  var paths=[];
+  rows.forEach(function(d){(Array.isArray(d.files)?d.files:[]).forEach(function(f){if(f.path)paths.push(f.path)})});
+  var map={};
+  for(var i=0;i<paths.length;i+=100){
+    var r=await sb.storage.from(BUCKET).createSignedUrls(paths.slice(i,i+100),3600);
+    if(r.data)r.data.forEach(function(x){if(x.signedUrl)map[x.path]=x.signedUrl});
+  }
+  rows.forEach(function(d){(Array.isArray(d.files)?d.files:[]).forEach(function(f){f.url=map[f.path]||''})});
+}
 async function loadList(){
   if(!sb)return;
   var r=await sb.from('evidence').select('*').order('created_at',{ascending:false}).limit(1000);
   if(r.error){$('list').innerHTML='';var d=document.createElement('div');d.className='empty';d.textContent='Gagal memuat data: '+r.error.message;$('list').appendChild(d);return}
-  docs=r.data||[];fillFilter();drawList();drawDash();
+  docs=r.data||[];try{await signAll(docs)}catch(e){}fillFilter();drawList();drawDash();
 }
 
 /* ---- mulai ---- */
 fillCats();fillFilter();
+function uname(e){return (e||'').split('@')[0]}
+function toEmail(u){return u+'@'+EMAIL_DOMAIN}
+function okUser(u){return /^[a-z0-9._]{3,20}$/.test(u)}
+function lm(t,err){var m=$('lmsg');m.textContent=t||'';m.className='msg'+(err?' err':'')}
+function show(w){
+  $('loginCard').style.display=w==='login'?'block':'none';
+  $('pendingCard').style.display=w==='pending'?'block':'none';
+  $('app').style.display=w==='app'?'block':'none';
+}
+var authed=false;
+async function gate(session){
+  if(!session){authed=false;docs=[];show('login');return}
+  var u=session.user,r=await sb.from('anggota').select('approved,nama').eq('id',u.id).maybeSingle();
+  var row=r.data;
+  if(row&&row.approved){
+    $('who').textContent='Masuk sebagai '+(row.nama||uname(u.email));
+    if(!$('by').value&&row.nama)$('by').value=row.nama;
+    show('app');
+    if(!authed){authed=true;loadList()}
+  }else{
+    authed=false;docs=[];$('pwho').textContent='Username: '+uname(u.email);show('pending');
+  }
+}
+function errId(m){
+  m=m||'';
+  if(/already registered/i.test(m))return 'Username ini sudah dipakai. Pilih username lain.';
+  if(/at least 6/i.test(m))return 'Password minimal 6 karakter.';
+  if(/invalid|valid email/i.test(m))return 'Username tidak dapat dipakai. Coba username lain atau hubungi admin.';
+  if(/rate limit/i.test(m))return 'Terlalu banyak percobaan. Coba lagi beberapa saat.';
+  if(/signups? .*disabled|not allowed/i.test(m))return 'Pendaftaran sedang ditutup. Hubungi admin.';
+  return m||'Terjadi kesalahan.';
+}
+$('toDaftar').onclick=function(e){e.preventDefault();$('fMasuk').style.display='none';$('fDaftar').style.display='block';lm('')};
+$('toMasuk').onclick=function(e){e.preventDefault();$('fDaftar').style.display='none';$('fMasuk').style.display='block';lm('')};
+
 if(SUPABASE_URL.indexOf('GANTI')===0||SUPABASE_KEY.indexOf('GANTI')===0||!window.supabase){
-  $('list').innerHTML='<div class="empty">Website belum dikonfigurasi. Isi SUPABASE_URL dan SUPABASE_KEY di index.html.</div>';
+  show('login');$('login').disabled=true;$('daftar').disabled=true;
+  lm('Website belum dikonfigurasi. Isi SUPABASE_URL dan SUPABASE_KEY di index.html.',true);
 }else{
   sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-  drawDash();loadList();
+  $('login').onclick=async function(){
+    var un=$('em').value.trim().toLowerCase(),pw=$('pw').value;
+    if(!un||!pw){lm('Isi username dan password.',true);return}
+    $('login').disabled=true;lm('Memeriksa…');
+    var r=await sb.auth.signInWithPassword({email:toEmail(un),password:pw});
+    $('login').disabled=false;
+    if(r.error){lm(/not confirmed/i.test(r.error.message)?'Akun belum aktif. Hubungi admin.':'Gagal masuk: username atau password salah.',true);return}
+    lm('');$('pw').value='';
+  };
+  $('pw').addEventListener('keydown',function(e){if(e.key==='Enter')$('login').click()});
+  $('daftar').onclick=async function(){
+    var nm=$('rn').value.trim(),un=$('re').value.trim().toLowerCase(),pw=$('rp').value;
+    if(!nm||!un||!pw){lm('Lengkapi nama, username, dan password.',true);return}
+    if(!okUser(un)){lm('Username 3–20 karakter: huruf kecil, angka, titik, atau garis bawah (tanpa spasi).',true);return}
+    if(pw.length<6){lm('Password minimal 6 karakter.',true);return}
+    $('daftar').disabled=true;lm('Mendaftarkan…');
+    var r=await sb.auth.signUp({email:toEmail(un),password:pw,options:{data:{nama:nm}}});
+    $('daftar').disabled=false;
+    if(r.error){lm(errId(r.error.message),true);return}
+    $('rp').value='';
+    if(!r.data.session){lm('Pendaftaran berhasil, tetapi akun belum aktif. Hubungi admin.');}
+    else{lm('');}
+  };
+  $('logout').onclick=function(){sb.auth.signOut()};
+  $('out2').onclick=function(){sb.auth.signOut()};
+  $('cek').onclick=async function(){var r=await sb.auth.getSession();gate(r.data&&r.data.session)};
+  sb.auth.onAuthStateChange(function(ev,session){setTimeout(function(){gate(session)},0)});
+  sb.auth.getSession().then(function(r){gate(r.data&&r.data.session)});
 }
 })();
 </script>
