@@ -53,6 +53,10 @@ a{color:var(--accent)}
 @media (prefers-color-scheme:dark){.stsel.ip{color:#fbbf24}.stsel.cp{color:#4ade80}}
 .lgd{display:flex;align-items:center;gap:6px;margin:4px 0;font-size:13px}
 .lgd i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.cm{margin:10px 0 4px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.cm>b{font-size:13px}
+.cmi{margin:8px 0 0;font-size:13.5px;padding-top:8px;border-top:1px dashed var(--line)}
+.cmi .cmeta{color:var(--muted);font-size:12px;margin-top:2px}
 .empty{color:var(--muted);text-align:center;padding:24px 0}
 #lb{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
 #lb.on{display:flex}#lb img,#lb video{max-width:100%;max-height:100%}
@@ -73,8 +77,9 @@ a{color:var(--accent)}
 .trend{flex:1;min-width:0;display:flex;align-items:flex-end;gap:2px;height:160px;border-bottom:1px solid var(--line);background:linear-gradient(var(--line) 1px,transparent 1px) 0 0/100% 50% repeat-y}
 .xl{display:flex;gap:2px;margin:3px 0 0 34px;font-size:9px;color:var(--muted)}
 .xl div{flex:1;min-width:0;text-align:center}
-.col{flex:1;min-width:0;height:100%;display:flex;flex-direction:column-reverse}
-.seg{flex:none;border-top:1px solid var(--card)}
+.col{flex:1;min-width:0;height:100%;display:flex;flex-direction:column-reverse;position:relative}
+.tot{position:absolute;left:-4px;right:-4px;text-align:center;font-size:10px;font-weight:700;line-height:1;pointer-events:none;color:var(--text)}
+.seg{flex:none;border-top:1px solid var(--card);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;overflow:hidden;line-height:1}
 .legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12.5px}
 .legend span{display:inline-flex;align-items:center;gap:5px}
 .legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
@@ -145,7 +150,8 @@ a{color:var(--accent)}
       </div>
       <div class="chartwrap"><div class="yax" id="dY"></div><div class="trend" id="dTrend"></div></div>
       <div class="xl" id="dTl"></div>
-      <div class="legend" id="dLeg"></div></div>
+      <div class="legend" id="dLeg"></div>
+      <div class="meta" style="margin-top:6px">Angka di atas batang = total evidence pada tanggal itu; angka di dalam warna = jumlah per kategori.</div></div>
   </div>
 
   <div class="card">
@@ -212,7 +218,7 @@ var CATS={
 };
 var OTHER='Lainnya (tulis sendiri)';
 /* ======================================================================= */
-var sb=null,docs=[],staged=[],busy=false,dashMo=null,myName='',MAX=20*1024*1024,BUCKET='evidence';
+var sb=null,docs=[],staged=[],busy=false,dashMo=null,myName='',cmts={},openCm={},MAX=20*1024*1024,BUCKET='evidence';
 
 function setMsg(t,err){var m=$('msg');m.textContent=t||'';m.className='msg'+(err?' err':'')}
 function fmt(n){return n>1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB'}
@@ -418,7 +424,7 @@ function drawDash(){
   var fd=function(dt){return dt.toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short',year:'numeric'})};
   var vals=[],mx=0,sum=0;
   for(var dn=1;dn<=dim;dn++){var dd=new Date(yr,mn,dn),k2=key(dd),v=days[k2]||0;vals.push([dd,v,dayCat[k2]||{}]);if(v>mx)mx=v;sum+=v}
-  var top=niceMax(mx);
+  var top=niceMax(mx+1);
   $('mTot').textContent='(total '+sum+' evidence)';
   var yx=$('dY');yx.innerHTML='';[top,top/2,0].forEach(function(t){yx.appendChild(mk('div','',String(t)))});
   var tr=$('dTrend');tr.innerHTML='';
@@ -426,10 +432,14 @@ function drawDash(){
   var used={};
   vals.forEach(function(x){
     var col=mk('div','col');col.title=fd(x[0])+': '+x[1]+' evidence';
+    var nc=0;order.forEach(function(c){if(x[2][c])nc++});
     order.forEach(function(c){
       var cnt=x[2][c];if(!cnt)return;used[c]=1;
-      var sg=mk('div','seg');sg.style.height=(cnt/top*100)+'%';sg.style.background=colr(c);sg.title=fd(x[0])+' · '+c+': '+cnt;col.appendChild(sg);
+      var sg=mk('div','seg');sg.style.height=(cnt/top*100)+'%';sg.style.background=colr(c);sg.title=fd(x[0])+' · '+c+': '+cnt;
+      if(nc>1&&cnt/top*160>=13)sg.textContent=String(cnt);
+      col.appendChild(sg);
     });
+    if(x[1]>0){var tt=mk('div','tot',String(x[1]));tt.style.bottom='calc('+(x[1]/top*100)+'% + 1px)';col.appendChild(tt)}
     tr.appendChild(col);
     tl.appendChild(mk('div','',String(x[0].getDate())));
   });
@@ -446,7 +456,7 @@ function filtered(){
     if(fy&&String(dateOf(d).getFullYear())!==fy)return false;
     if(fs&&(d.status||ST_IP)!==fs)return false;
     if(!q)return true;
-    return ((d.title||'')+' '+(d.sender||'')+' '+(d.notes||'')+' '+(d.action||'')).toLowerCase().indexOf(q)>-1;
+    return ((d.title||'')+' '+(d.sender||'')+' '+(d.notes||'')+' '+(d.action||'')+' '+(cmts[d.id]||[]).map(function(c){return c.isi}).join(' ')).toLowerCase().indexOf(q)>-1;
   });
 }
 
@@ -514,7 +524,7 @@ async function exportAll(){
     }
     var wb=new ExcelJS.Workbook(),ws=wb.addWorksheet('Evidence'),nI=0,nO=0;
     rows.forEach(function(d,ri){nI=Math.max(nI,(rowImgs[ri]||[]).length);nO=Math.max(nO,(rowOth[ri]||[]).length)});
-    var heads=['Tanggal','Kategori','Action','Judul','Pengirim','Keterangan','Waktu kirim','Jumlah file','Status'],widths=[12,14,26,30,18,40,18,10,13],q;
+    var heads=['Tanggal','Kategori','Action','Judul','Pengirim','Keterangan','Waktu kirim','Jumlah file','Status','Comment penyelesaian'],widths=[12,14,26,30,18,40,18,10,13,50],q;
     for(q=1;q<=nI;q++){heads.push('Foto '+q);widths.push(24)}
     for(q=1;q<=nO;q++){heads.push('File '+q);widths.push(32)}
     ws.addRow(heads);
@@ -523,7 +533,7 @@ async function exportAll(){
     ws.views=[{state:'frozen',ySplit:1}];
     rows.forEach(function(d,ri){
       var fl=Array.isArray(d.files)?d.files:[],dt=dateOf(d);
-      var row=ws.addRow([new Date(Date.UTC(dt.getFullYear(),dt.getMonth(),dt.getDate())),d.cat,d.action||'',d.title,d.sender||'',d.notes||'',new Date(d.created_at).toLocaleString('sv-SE'),fl.length,d.status||ST_IP]);
+      var row=ws.addRow([new Date(Date.UTC(dt.getFullYear(),dt.getMonth(),dt.getDate())),d.cat,d.action||'',d.title,d.sender||'',d.notes||'',new Date(d.created_at).toLocaleString('sv-SE'),fl.length,d.status||ST_IP,(cmts[d.id]||[]).map(function(c){return '['+fmtD(new Date(c.created_at))+'] '+(c.penulis||'-')+': '+c.isi}).join('\n')]);
       row.getCell(1).numFmt='dd/mm/yyyy';
       row.alignment={vertical:'top',wrapText:true};
       var imgs=rowImgs[ri]||[],oth=rowOth[ri]||[];
@@ -531,10 +541,10 @@ async function exportAll(){
       imgs.forEach(function(j,ix){
         var sc=Math.min(165/j.img.w,125/j.img.h,1);
         var id=wb.addImage({base64:j.img.data,extension:'jpeg'});
-        ws.addImage(id,{tl:{col:9+ix+0.05,row:ri+1+0.05},ext:{width:Math.round(j.img.w*sc),height:Math.round(j.img.h*sc)}});
+        ws.addImage(id,{tl:{col:10+ix+0.05,row:ri+1+0.05},ext:{width:Math.round(j.img.w*sc),height:Math.round(j.img.h*sc)}});
       });
       oth.forEach(function(j,ix){
-        var cell=row.getCell(10+nI+ix);
+        var cell=row.getCell(11+nI+ix);
         if(j.blob){cell.value={text:j.f.name||'file',hyperlink:j.zipPath};cell.font={color:{argb:'FF2563EB'},underline:true}}
         else cell.value=(j.f.name||'file')+' (gagal diunduh)';
       });
@@ -551,6 +561,38 @@ async function exportAll(){
   exporting=false;btn.disabled=false;btn.textContent=lbl;
 }
 
+async function addComment(d,txt){
+  var r=await sb.from('komentar').insert({evidence_id:d.id,penulis:myName||null,isi:txt}).select('*');
+  if(r.error||!r.data||!r.data.length){alert('Gagal mengirim comment. Pastikan SQL komentar sudah dijalankan di Supabase.');return false}
+  (cmts[d.id]=cmts[d.id]||[]).push(r.data[0]);
+  return true;
+}
+function commentBox(d){
+  var box=mk('div','cm'),list=cmts[d.id]||[];
+  box.appendChild(mk('b','','Comment action penyelesaian'+(list.length?' ('+list.length+')':'')));
+  list.forEach(function(c){
+    var r=mk('div','cmi'),tx=mk('div','',c.isi);tx.style.whiteSpace='pre-wrap';r.appendChild(tx);
+    r.appendChild(mk('div','cmeta',(c.penulis||'-')+' · '+new Date(c.created_at).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'})));
+    box.appendChild(r);
+  });
+  if(openCm[d.id]){
+    var ta=document.createElement('textarea');ta.placeholder='Tulis cara penyelesaian atau tindak lanjutnya…';ta.maxLength=2000;ta.style.minHeight='64px';ta.style.marginTop='8px';
+    var bs=mk('button','btn','Kirim comment');bs.style.marginTop='8px';
+    var bc=mk('button','btn sec','Batal');bc.style.marginLeft='8px';
+    bs.onclick=async function(){
+      var v=ta.value.trim();if(!v){ta.focus();return}
+      bs.disabled=true;var ok=await addComment(d,v);
+      if(ok){delete openCm[d.id];drawList()}else{bs.disabled=false}
+    };
+    bc.onclick=function(){delete openCm[d.id];drawList()};
+    box.appendChild(ta);box.appendChild(bs);box.appendChild(bc);
+  }else{
+    var ba=mk('button','btn sec','+ Tambah comment penyelesaian');ba.style.marginTop='8px';
+    ba.onclick=function(){openCm[d.id]=true;drawList()};
+    box.appendChild(ba);
+  }
+  return box;
+}
 async function setStatus(d,sel){
   var nv=sel.value,old=d.status||ST_IP;
   if(nv===old)return;
@@ -598,6 +640,7 @@ function drawList(){
       });
       it.appendChild(g);
     }
+    it.appendChild(commentBox(d));
     L.appendChild(it);
   });
 }
@@ -628,7 +671,12 @@ async function loadList(){
   if(!sb)return;
   var r=await sb.from('evidence').select('*').order('tanggal',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false}).limit(1000);
   if(r.error){$('list').innerHTML='';var d=document.createElement('div');d.className='empty';d.textContent='Gagal memuat data: '+r.error.message;$('list').appendChild(d);return}
-  docs=r.data||[];try{await signAll(docs)}catch(e){}fillFilter();drawList();drawDash();
+  docs=r.data||[];try{await signAll(docs)}catch(e){}
+  try{
+    var rc=await sb.from('komentar').select('*').order('created_at',{ascending:true}).limit(5000);
+    cmts={};if(!rc.error&&rc.data)rc.data.forEach(function(c){(cmts[c.evidence_id]=cmts[c.evidence_id]||[]).push(c)});
+  }catch(e){}
+  fillFilter();drawList();drawDash();
 }
 
 /* ---- mulai ---- */
