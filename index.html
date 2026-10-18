@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -60,8 +59,12 @@ a{color:var(--accent)}
 .hb .tr{flex:1;background:var(--bg);border-radius:6px;height:14px;overflow:hidden}
 .hb .tr i{display:block;height:100%;background:var(--accent)}
 .hb .v{width:30px;text-align:right;color:var(--muted)}
-.trend{display:flex;align-items:flex-end;gap:3px;height:110px;border-bottom:1px solid var(--line)}
-.trend div{flex:1;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}
+.trend{display:flex;align-items:flex-end;gap:4px;height:160px;border-bottom:1px solid var(--line)}
+.col{flex:1;min-width:0;height:100%;display:flex;flex-direction:column-reverse}
+.seg{flex:none;border-top:1px solid var(--card)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12.5px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
 .tl{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;margin-top:3px}
 .head{display:flex;justify-content:space-between;align-items:center}
 </style>
@@ -115,8 +118,9 @@ a{color:var(--accent)}
       <div><h3>Pengirim teratas</h3><div id="dBy"></div></div>
       <div><h3>Action terbanyak</h3><div id="dAct"></div></div>
     </div>
-    <div style="margin-top:18px"><h3 style="font-size:14px;margin:0 0 8px">Kiriman 14 hari terakhir</h3>
-      <div class="trend" id="dTrend"></div><div class="tl" id="dTl"></div></div>
+    <div style="margin-top:18px"><h3 style="font-size:14px;margin:0 0 8px">Kiriman 14 hari terakhir per kategori</h3>
+      <div class="trend" id="dTrend"></div><div class="tl" id="dTl"></div>
+      <div class="legend" id="dLeg"></div></div>
   </div>
 
   <div class="card">
@@ -297,13 +301,13 @@ function bars(box,map,max){
   });
 }
 function drawDash(){
-  var cats={},acts={},snd={},days={},img=0,vid=0,oth=0,bytes=0,tc=0,nf=0,now=new Date();
+  var cats={},acts={},snd={},days={},dayCat={},img=0,vid=0,oth=0,bytes=0,tc=0,nf=0,now=new Date();
   function key(d){return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate()}
   docs.forEach(function(d){
     cats[d.cat||'Umum']=(cats[d.cat||'Umum']||0)+1;
     if(d.action)acts[d.action]=(acts[d.action]||0)+1;
     var s=d.sender||'Tanpa nama';snd[s]=(snd[s]||0)+1;
-    var dt=new Date(d.created_at),k=key(dt);days[k]=(days[k]||0)+1;if(k===key(now))tc++;
+    var dt=new Date(d.created_at),k=key(dt);days[k]=(days[k]||0)+1;(dayCat[k]=dayCat[k]||{})[d.cat||'Umum']=((dayCat[k]||{})[d.cat||'Umum']||0)+1;if(k===key(now))tc++;
     (Array.isArray(d.files)?d.files:[]).forEach(function(f){nf++;bytes+=f.size||0;var t=kind(f.type);if(t==='img')img++;else if(t==='vid')vid++;else oth++});
   });
   var size=bytes>1073741824?(bytes/1073741824).toFixed(2)+' GB':(bytes/1048576).toFixed(1)+' MB';
@@ -311,11 +315,27 @@ function drawDash(){
   var st=$('stats');st.innerHTML='';
   items.forEach(function(it){var b=mk('div','stat');b.appendChild(mk('b','',String(it[1])));b.appendChild(mk('span','',it[0]));st.appendChild(b)});
   bars($('dCat'),cats,8);bars($('dBy'),snd,5);bars($('dAct'),acts,8);
-  var tr=$('dTrend');tr.innerHTML='';var vals=[],mx=1,first='',last='';
-  for(var i=13;i>=0;i--){var d=new Date(now.getFullYear(),now.getMonth(),now.getDate()-i);var v=days[key(d)]||0;vals.push([d,v]);if(v>mx)mx=v}
-  vals.forEach(function(x){var b=mk('div');b.style.height=Math.max(2,Math.round(x[1]/mx*100))+'%';b.title=x[0].toLocaleDateString('id-ID',{day:'numeric',month:'short'})+': '+x[1];tr.appendChild(b)});
-  var f=function(d){return d.toLocaleDateString('id-ID',{day:'numeric',month:'short'})};
-  var tl=$('dTl');tl.innerHTML='';tl.appendChild(mk('span','',f(vals[0][0])));tl.appendChild(mk('span','',f(vals[13][0])));
+  var order=Object.keys(CATS);Object.keys(cats).forEach(function(c){if(order.indexOf(c)<0)order.push(c)});
+  var PAL=['#2563eb','#16a34a','#f59e0b','#dc2626','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#4b5563','#0d9488','#a855f7','#84cc16'];
+  var colr=function(c){var ix=order.indexOf(c);return PAL[(ix<0?0:ix)%PAL.length]};
+  var f=function(dt){return dt.toLocaleDateString('id-ID',{day:'numeric',month:'short'})};
+  var tr=$('dTrend');tr.innerHTML='';var vals=[],mx=1;
+  for(var n=13;n>=0;n--){var dd=new Date(now.getFullYear(),now.getMonth(),now.getDate()-n),k2=key(dd),v=days[k2]||0;vals.push([dd,v,dayCat[k2]||{}]);if(v>mx)mx=v}
+  var used={};
+  vals.forEach(function(x){
+    var col=mk('div','col');col.title=f(x[0])+': '+x[1]+' evidence';
+    if(!x[1]){var e=mk('div','seg');e.style.height='2px';e.style.background='var(--line)';col.appendChild(e)}
+    order.forEach(function(c){
+      var cnt=x[2][c];if(!cnt)return;used[c]=1;
+      var sg=mk('div','seg');sg.style.height=(cnt/mx*100)+'%';sg.style.background=colr(c);sg.title=f(x[0])+' · '+c+': '+cnt;col.appendChild(sg);
+    });
+    tr.appendChild(col);
+  });
+  var tl=$('dTl');tl.innerHTML='';tl.appendChild(mk('span','',f(vals[0][0])));tl.appendChild(mk('span','','Maks '+mx+' per hari'));tl.appendChild(mk('span','',f(vals[13][0])));
+  var lg=$('dLeg');lg.innerHTML='';
+  var uk=order.filter(function(c){return used[c]});
+  if(!uk.length)lg.appendChild(mk('span','','Belum ada kiriman dalam 14 hari terakhir'));
+  uk.forEach(function(c){var sp=mk('span'),sw=mk('i');sw.style.background=colr(c);sp.appendChild(sw);sp.appendChild(document.createTextNode(c));lg.appendChild(sp)});
 }
 
 function drawList(){
