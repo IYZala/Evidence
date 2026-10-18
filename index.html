@@ -90,9 +90,11 @@ textarea{min-height:90px;resize:vertical}
         <select id="cat"></select></div>
       <div><label for="by">Nama pengirim</label><input type="text" id="by" placeholder="Nama Anda"></div>
     </div>
+    <div id="actWrap">
     <label for="act">Action *</label>
     <select id="act"></select>
     <input type="text" id="actOther" placeholder="Tulis action Anda…" style="display:none;margin-top:8px">
+    </div>
     <label for="notes">Keterangan</label>
     <textarea id="notes" placeholder="Tuliskan kronologi, lokasi, atau catatan lain…"></textarea>
     <label>Lampiran (foto, video, file; maks 20 MB per file)</label>
@@ -126,6 +128,7 @@ var SUPABASE_KEY = 'sb_publishable_bp99F0yVm7C07U2sl0yWJA_7aRcKRwo';
 var $=function(i){return document.getElementById(i)};
 /* ====== DAFTAR KATEGORI DAN ACTION (boleh diubah sesuai kebutuhan) ====== */
 var CATS={
+ 'Umum':[],'Inspeksi':[],'Temuan':[],'Perbaikan':[],'Dokumen':[],'Lainnya':[],
  'Hardware':['Pengecekan unit','Penggantian komponen','Pembersihan / maintenance','Instalasi perangkat baru','Perbaikan (repair)','Eskalasi ke vendor / teknisi'],
  'Software':['Instalasi / update aplikasi','Konfigurasi','Troubleshooting error','Reset akun / password','Backup / restore','Eskalasi ke tim terkait'],
  'Network':['Cek konektivitas (ping / traceroute)','Restart perangkat jaringan','Konfigurasi perangkat','Penggantian kabel / konektor','Monitoring link','Eskalasi ke provider'],
@@ -146,6 +149,7 @@ try{$('by').value=localStorage.getItem('ev_by')||''}catch(e){}
 function opt(v,t){var o=document.createElement('option');o.value=v;o.textContent=t;return o}
 function fillActs(){
   var a=$('act'),c=$('cat').value;a.innerHTML='';
+  $('actWrap').style.display=(CATS[c]&&CATS[c].length)?'block':'none';
   a.appendChild(opt('','— Pilih action —'));
   (CATS[c]||[]).forEach(function(x){a.appendChild(opt(x,x))});
   a.appendChild(opt(OTHER,OTHER));
@@ -163,7 +167,8 @@ function fillFilter(){
   docs.forEach(function(d){if(d.cat&&!seen[d.cat]){seen[d.cat]=1;f.appendChild(opt(d.cat,d.cat))}});
   f.value=cur;
 }
-function getAction(){var v=$('act').value;return v===OTHER?$('actOther').value.trim():v}
+function needAct(){var l=CATS[$('cat').value];return !!(l&&l.length)}
+function getAction(){if(!needAct())return null;var v=$('act').value;return v===OTHER?$('actOther').value.trim():v}
 $('cat').onchange=fillActs;
 $('act').onchange=function(){var o=$('act').value===OTHER;$('actOther').style.display=o?'block':'none';if(o)$('actOther').focus()};
 
@@ -201,8 +206,8 @@ $('send').onclick=async function(){
   if(!sb){setMsg('Website belum dikonfigurasi. Isi SUPABASE_URL dan SUPABASE_KEY di index.html.',true);return}
   var title=$('title').value.trim();
   if(!title){setMsg('Judul wajib diisi.',true);return}
-  if(!$('act').value){setMsg('Pilih Action terlebih dahulu.',true);return}
-  if(!getAction()){setMsg('Tulis action Anda pada kolom yang tersedia.',true);return}
+  if(needAct()&&!$('act').value){setMsg('Pilih Action terlebih dahulu.',true);return}
+  if(needAct()&&!getAction()){setMsg('Tulis action Anda pada kolom yang tersedia.',true);return}
   if(!$('notes').value.trim()&&!staged.length){setMsg('Isi keterangan atau lampirkan minimal satu file.',true);return}
   busy=true;$('send').disabled=true;setMsg('Mengunggah…');
   var out=[];
