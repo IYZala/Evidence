@@ -14,7 +14,7 @@ h1{font-size:22px;margin:8px 0 2px}h2{font-size:17px;margin:0 0 12px}
 .sub{color:var(--muted);margin:0 0 18px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px}
 label{display:block;font-weight:600;font-size:13px;margin:12px 0 4px}
-input[type=text],input[type=password],select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
+input[type=text],input[type=password],input[type=date],select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit}
 textarea{min-height:90px;resize:vertical}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:560px){.row{grid-template-columns:1fr}}
@@ -125,7 +125,7 @@ a{color:var(--accent)}
     <div style="margin-top:18px">
       <div class="head" style="margin-bottom:8px;flex-wrap:wrap;gap:6px">
         <h3 style="font-size:14px;margin:0">Kiriman harian menurut kategori <span class="meta" id="mTot" style="font-weight:400"></span></h3>
-        <div><button class="btn sec" id="mPrev" title="Bulan sebelumnya">◀</button><b id="mLbl" style="margin:0 8px;font-size:13px"></b><button class="btn sec" id="mNext" title="Bulan berikutnya">▶</button></div>
+        <div><button class="btn sec" id="mPrev" title="Bulan sebelumnya">◀</button><b id="mLbl" style="margin:0 8px;font-size:13px"></b><button class="btn sec" id="mNext" title="Bulan berikutnya">▶</button><select id="mYr" title="Pilih tahun" style="width:auto;margin-left:8px;padding:4px 6px;font-size:13px"></select></div>
       </div>
       <div class="chartwrap"><div class="yax" id="dY"></div><div class="trend" id="dTrend"></div></div>
       <div class="xl" id="dTl"></div>
@@ -136,6 +136,8 @@ a{color:var(--accent)}
     <h2>Kirim evidence baru</h2>
     <label for="title">Judul *</label>
     <input type="text" id="title" placeholder="Contoh: Pengecekan unit A-12">
+    <label for="tgl">Tanggal evidence *</label>
+    <input type="date" id="tgl">
     <div class="row">
       <div><label for="cat">Kategori</label>
         <select id="cat"></select></div>
@@ -162,6 +164,7 @@ a{color:var(--accent)}
     <div class="bar">
       <input type="text" id="q" placeholder="Cari judul, nama, atau keterangan…">
       <select id="fcat"></select>
+      <select id="fyr"></select>
     </div>
     <div id="list"><div class="empty">Memuat…</div></div>
   </div>
@@ -221,6 +224,11 @@ function fillFilter(){
   Object.keys(CATS).forEach(function(k){seen[k]=1;f.appendChild(opt(k,k))});
   docs.forEach(function(d){if(d.cat&&!seen[d.cat]){seen[d.cat]=1;f.appendChild(opt(d.cat,d.cat))}});
   f.value=cur;
+  var y=$('fyr'),cy=y.value,ys={};
+  docs.forEach(function(d){ys[dateOf(d).getFullYear()]=1});
+  y.innerHTML='';y.appendChild(opt('','Semua tahun'));
+  Object.keys(ys).sort().reverse().forEach(function(k){y.appendChild(opt(k,k))});
+  y.value=cy;
 }
 function needAct(){var l=CATS[$('cat').value];return !!(l&&l.length)}
 function getAction(){if(!needAct())return null;var v=$('act').value;return v===OTHER?$('actOther').value.trim():v}
@@ -261,6 +269,8 @@ $('send').onclick=async function(){
   if(!sb){setMsg('Website belum dikonfigurasi. Isi SUPABASE_URL dan SUPABASE_KEY di index.html.',true);return}
   var title=$('title').value.trim();
   if(!title){setMsg('Judul wajib diisi.',true);return}
+  if(!$('tgl').value){setMsg('Pilih tanggal evidence.',true);return}
+  if($('tgl').value>todayStr()){setMsg('Tanggal evidence tidak boleh melebihi hari ini.',true);return}
   if(needAct()&&!$('act').value){setMsg('Pilih Action terlebih dahulu.',true);return}
   if(needAct()&&!getAction()){setMsg('Tulis action Anda pada kolom yang tersedia.',true);return}
   if(!$('notes').value.trim()&&!staged.length){setMsg('Isi keterangan atau lampirkan minimal satu file.',true);return}
@@ -277,10 +287,10 @@ $('send').onclick=async function(){
     }
     var by=$('by').value.trim();
     try{localStorage.setItem('ev_by',by)}catch(e){}
-    var ins=await sb.from('evidence').insert({title:title,cat:$('cat').value,action:getAction(),sender:by||'Tanpa nama',notes:$('notes').value.trim(),files:out});
+    var ins=await sb.from('evidence').insert({title:title,tanggal:$('tgl').value,cat:$('cat').value,action:getAction(),sender:by||'Tanpa nama',notes:$('notes').value.trim(),files:out});
     if(ins.error)throw ins.error;
     staged.forEach(function(s){URL.revokeObjectURL(s.url)});staged=[];render();
-    $('title').value='';$('notes').value='';fillActs();
+    $('title').value='';$('notes').value='';fillActs();setToday();
     setMsg('Evidence berhasil dikirim ✓');
     loadList();
   }catch(e){
@@ -297,6 +307,13 @@ function closeLb(){$('lb').classList.remove('on');$('lb').innerHTML=''}
 $('lb').onclick=function(e){if(e.target===$('lb'))closeLb()};
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closeLb()});
 
+function dateOf(d){
+  if(d.tanggal){var p=String(d.tanggal).split('-');return new Date(+p[0],+p[1]-1,+p[2],12)}
+  return new Date(d.created_at);
+}
+function fmtD(dt){return dt.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})}
+function todayStr(){var n=new Date(),m=n.getMonth()+1,d=n.getDate();return n.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(d<10?'0':'')+d}
+function setToday(){var t=todayStr();$('tgl').value=t;$('tgl').max=t}
 function niceMax(m){var st=[10,20,30,40,50,100,150,200,300,400,500,1000];for(var i=0;i<st.length;i++)if(m<=st[i])return st[i];return Math.ceil(m/1000)*1000}
 function mk(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!==undefined)e.textContent=x;return e}
 function bars(box,map,max){
@@ -317,7 +334,7 @@ function drawDash(){
     cats[d.cat||'Umum']=(cats[d.cat||'Umum']||0)+1;
     if(d.action)acts[d.action]=(acts[d.action]||0)+1;
     var s=d.sender||'Tanpa nama';snd[s]=(snd[s]||0)+1;
-    var dt=new Date(d.created_at),k=key(dt);days[k]=(days[k]||0)+1;(dayCat[k]=dayCat[k]||{})[d.cat||'Umum']=((dayCat[k]||{})[d.cat||'Umum']||0)+1;if(k===key(now))tc++;
+    var dt=dateOf(d),k=key(dt);days[k]=(days[k]||0)+1;(dayCat[k]=dayCat[k]||{})[d.cat||'Umum']=((dayCat[k]||{})[d.cat||'Umum']||0)+1;if(key(new Date(d.created_at))===key(now))tc++;
     (Array.isArray(d.files)?d.files:[]).forEach(function(f){nf++;bytes+=f.size||0;var t=kind(f.type);if(t==='img')img++;else if(t==='vid')vid++;else oth++});
   });
   var size=bytes>1073741824?(bytes/1073741824).toFixed(2)+' GB':(bytes/1048576).toFixed(1)+' MB';
@@ -333,6 +350,9 @@ function drawDash(){
   var yr=Math.floor(dashMo/12),mn=dashMo%12,dim=new Date(yr,mn+1,0).getDate();
   $('mLbl').textContent=new Date(yr,mn,1).toLocaleDateString('id-ID',{month:'long',year:'numeric'});
   $('mNext').disabled=(dashMo>=cur);
+  var ys=now.getFullYear(),y0=ys;docs.forEach(function(d){var yy=dateOf(d).getFullYear();if(yy<y0)y0=yy});
+  if(ys-y0>20)y0=ys-20;
+  var sel=$('mYr');sel.innerHTML='';for(var yv=ys;yv>=y0;yv--)sel.appendChild(opt(String(yv),String(yv)));sel.value=String(yr);
   var fd=function(dt){return dt.toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short',year:'numeric'})};
   var vals=[],mx=0,sum=0;
   for(var dn=1;dn<=dim;dn++){var dd=new Date(yr,mn,dn),k2=key(dd),v=days[k2]||0;vals.push([dd,v,dayCat[k2]||{}]);if(v>mx)mx=v;sum+=v}
@@ -358,9 +378,10 @@ function drawDash(){
 }
 
 function drawList(){
-  var q=$('q').value.trim().toLowerCase(),fc=$('fcat').value,L=$('list');L.innerHTML='';
+  var q=$('q').value.trim().toLowerCase(),fc=$('fcat').value,fy=$('fyr').value,L=$('list');L.innerHTML='';
   var rows=docs.filter(function(d){
     if(fc&&d.cat!==fc)return false;
+    if(fy&&String(dateOf(d).getFullYear())!==fy)return false;
     if(!q)return true;
     return ((d.title||'')+' '+(d.sender||'')+' '+(d.notes||'')+' '+(d.action||'')).toLowerCase().indexOf(q)>-1;
   });
@@ -371,7 +392,8 @@ function drawList(){
     var t=document.createElement('div');t.className='t';t.textContent=d.title;it.appendChild(t);
     var m=document.createElement('div');m.className='meta';
     var c=document.createElement('span');c.className='chip';c.textContent=d.cat;m.appendChild(c);
-    m.appendChild(document.createTextNode((d.sender||'')+' · '+new Date(d.created_at).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'})));
+    var when=d.tanggal?fmtD(dateOf(d)):new Date(d.created_at).toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'});
+    m.appendChild(document.createTextNode((d.sender||'')+' · '+when));
     it.appendChild(m);
     if(d.action){var ac=mk('div','act');var ab=mk('b','','Action: ');ac.appendChild(ab);ac.appendChild(document.createTextNode(d.action));it.appendChild(ac)}
     if(d.notes){var n=document.createElement('div');n.className='notes';n.textContent=d.notes;it.appendChild(n)}
@@ -390,9 +412,10 @@ function drawList(){
     L.appendChild(it);
   });
 }
-$('q').oninput=drawList;$('fcat').onchange=drawList;$('reload').onclick=function(){loadList()};
+$('q').oninput=drawList;$('fcat').onchange=drawList;$('fyr').onchange=drawList;$('reload').onclick=function(){loadList()};
 function curMo(){var n=new Date();return n.getFullYear()*12+n.getMonth()}
 $('mPrev').onclick=function(){dashMo=(dashMo===null?curMo():dashMo)-1;drawDash()};
+$('mYr').onchange=function(){var y=+$('mYr').value,m=(dashMo===null?curMo():dashMo)%12;dashMo=Math.min(curMo(),y*12+m);drawDash()};
 $('mNext').onclick=function(){var c=curMo();dashMo=Math.min(c,(dashMo===null?c:dashMo)+1);drawDash()};
 
 async function signAll(rows){
@@ -407,13 +430,13 @@ async function signAll(rows){
 }
 async function loadList(){
   if(!sb)return;
-  var r=await sb.from('evidence').select('*').order('created_at',{ascending:false}).limit(1000);
+  var r=await sb.from('evidence').select('*').order('tanggal',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false}).limit(1000);
   if(r.error){$('list').innerHTML='';var d=document.createElement('div');d.className='empty';d.textContent='Gagal memuat data: '+r.error.message;$('list').appendChild(d);return}
   docs=r.data||[];try{await signAll(docs)}catch(e){}fillFilter();drawList();drawDash();
 }
 
 /* ---- mulai ---- */
-fillCats();fillFilter();
+fillCats();fillFilter();setToday();
 function uname(e){return (e||'').split('@')[0]}
 function toEmail(u){return u+'@'+EMAIL_DOMAIN}
 function okUser(u){return /^[a-z0-9._]{3,20}$/.test(u)}
